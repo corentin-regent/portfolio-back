@@ -1,0 +1,17 @@
+{
+  "name": "corentin-regent/portfolio-back",
+  "image": "mcr.microsoft.com/devcontainers/go:bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "bierner.markdown-preview-github-styles",
+        "github.vscode-github-actions",
+        "ms-azuretools.vscode-docker",
+        "yzhang.markdown-all-in-one"
+      ]
+    }
+  }
+}
