@@ -13,8 +13,6 @@ import (
 	"sync"
 )
 
-const smtpsPort = "587"
-
 type smtpServer struct {
 	Host string
 	Port string
@@ -39,6 +37,7 @@ func HandleEmail(
 
 	smtpClientDomain := getEnv("SMTP_CLIENT_DOMAIN")
 	smtpServerDomain := getEnv("SMTP_SERVER_DOMAIN")
+	smtpServerPort := getEnv("SMTP_SERVER_PORT")
 	targetEmailAddress := getEnv("TARGET_EMAIL_ADDRESS")
 	sourceEmailAddress := getEnv("SOURCE_EMAIL_ADDRESS")
 	sourceEmailPassword := getEnv("SOURCE_EMAIL_PASSWORD")
@@ -56,7 +55,7 @@ func HandleEmail(
 	setupSmtpClient := func() (client *smtp.Client, err error) {
 		server := smtpServer{
 			Host: smtpServerDomain,
-			Port: smtpsPort,
+			Port: smtpServerPort,
 		}
 		tlsConfig := &tls.Config{
 			ServerName: server.Host,
