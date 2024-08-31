@@ -51,11 +51,7 @@ func TestPostEmailSendsEmail(t *testing.T) {
 }
 
 func TestPostEmailRedirectIfOk(t *testing.T) {
-	smtpHandler := func(_ net.Addr, _ string, _ []string, _ []byte) error {
-		return nil
-	}
-
-	smtpServer, smtpServerPort := setupSmtpServer(t, smtpHandler, nil)
+	smtpServer, smtpServerPort := setupSmtpServer(t, nil, nil)
 	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(smtpServerPort)
 
 	response := requestPostEmail(t, testHttpServer.URL)
