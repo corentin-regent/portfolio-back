@@ -1,0 +1,30 @@
+name: CI/CD
+
+on:
+  push:
+    branches: main
+    paths:
+      - '**/*.go'
+      - go.mod
+      - go.sum
+      - .github/workflows/cicd.yml
+      - '**/*.crt'
+      - '**/*.key'
+
+jobs:
+  test:
+    name: Run automated tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run the tests
+        run: go test ./...
