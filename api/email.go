@@ -22,7 +22,7 @@ func (server *smtpServer) Name() string {
 	return server.Host + ":" + server.Port
 }
 
-type postEmailData struct {
+type postEmailBody struct {
 	Sender             string
 	Subject            string
 	Body               string
@@ -41,14 +41,9 @@ func HandleEmail(
 	targetEmailAddress := getEnv("TARGET_EMAIL_ADDRESS")
 	sourceEmailAddress := getEnv("SOURCE_EMAIL_ADDRESS")
 	sourceEmailPassword := getEnv("SOURCE_EMAIL_PASSWORD")
+	skipTlsVerify := getEnv("TEST_ONLY_SKIP_TLS_VERIFY") == "dummy string just in case"
 
-	var (
-		initSmtp     sync.Once
-		smtpClient   *smtp.Client
-		smtpSetupErr error
-	)
-
-	buildMessage := func(email *postEmailData) string {
+	buildMessage := func(email *postEmailBody) string {
 		return fmt.Sprintf("To: %s\r\nSubject: %s\r\n\r\n%s\r\n\r\nSent by %s", targetEmailAddress, email.Subject, email.Body, email.Sender)
 	}
 
@@ -58,7 +53,8 @@ func HandleEmail(
 			Port: smtpServerPort,
 		}
 		tlsConfig := &tls.Config{
-			ServerName: server.Host,
+			InsecureSkipVerify: skipTlsVerify,
+			ServerName:         server.Host,
 		}
 		auth := smtp.PlainAuth("", sourceEmailAddress, sourceEmailPassword, server.Host)
 
@@ -85,7 +81,7 @@ func HandleEmail(
 		return
 	}
 
-	sendEmail := func(client *smtp.Client, email *postEmailData) (err error) {
+	sendEmail := func(client *smtp.Client, email *postEmailBody) (err error) {
 		log.Println("[DEBUG] Setting SMTP email sender")
 		if err = client.Mail(sourceEmailAddress); err != nil {
 			return
@@ -109,7 +105,7 @@ func HandleEmail(
 		return
 	}
 
-	failPostEmail := func(response http.ResponseWriter, request *http.Request, email postEmailData, err error) {
+	failPostEmail := func(response http.ResponseWriter, request *http.Request, email postEmailBody, err error) {
 		log.Printf("[ERROR] POST /email failed: %s\n", err)
 		failureRedirectUrl := fmt.Sprintf(
 			"mailto:%s?subject=%s&body=%s",
@@ -120,9 +116,15 @@ func HandleEmail(
 		http.Redirect(response, request, failureRedirectUrl, http.StatusSeeOther)
 	}
 
+	var (
+		initSmtp     sync.Once
+		smtpClient   *smtp.Client
+		smtpSetupErr error
+	)
+
 	handlePostEmail := func(response http.ResponseWriter, request *http.Request) {
 		decoder := json.NewDecoder(request.Body)
-		var email postEmailData
+		var email postEmailBody
 		err := decoder.Decode(&email)
 		if err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
