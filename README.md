@@ -8,7 +8,7 @@ This is a Work In Progress
 
 | Name                       | Description                                                                         | Example                                            |
 | -------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------- |
-| CORS_ALLOWED_ORIGINS       | Space-separated list of front-end domains from which the client browser can request | corentin-regent.github.io corentin-regent.is-a.dev |
+| CORS_ALLOWED_ORIGINS       | Comma-separated list of front-end domains from which the client browser can request | corentin-regent.github.io,corentin-regent.is-a.dev |
 | HTTP_SERVER_PORT           | The port on which this server should listen                                         | 80                                                 |
 | SMTP_CLIENT_DOMAIN         | Host name with which the SMTP client introduces itself before submitting emails     | localhost                                          |
 | SMTP_SERVER_DOMAIN         | Domain of the SMTP server that collects emails                                      | smtp.gmail.com                                     |
