@@ -47,6 +47,8 @@ func HandlePostEmail(
 	sourceEmailPassword := getEnv("SOURCE_EMAIL_PASSWORD")
 	skipTlsVerify := getEnv("TEST_ONLY_SKIP_TLS_VERIFY") == "dummy string just in case"
 
+	smtpMessageMutex := sync.Mutex{}
+
 	buildMessage := func(email *requestBody) string {
 		return fmt.Sprintf(
 			"To: %s\r\nSubject: %s\r\n\r\n%s\r\n\r\nSent by %s",
@@ -102,6 +104,8 @@ func HandlePostEmail(
 
 	sendEmail := func(request *http.Request, client *smtp.Client, email *requestBody) (err error) {
 		doneChannel := make(chan struct{})
+		smtpMessageMutex.Lock()
+		defer smtpMessageMutex.Unlock()
 
 		log.Println("[DEBUG] Setting SMTP email sender")
 		go func() {

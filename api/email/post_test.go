@@ -145,6 +145,33 @@ func TestCancellation(t *testing.T) {
 	assert.Equal(t, expectedErrorRedirectUrl, response.Header.Get("Location"))
 }
 
+func TestConcurrentRequests(t *testing.T) {
+	concurrentRequests := 10
+	emailsReceived := 0
+	smtpHandler := func(_ net.Addr, _ string, _ []string, _ []byte) error {
+		emailsReceived++
+		return nil
+	}
+
+	smtpServer, smtpServerPort := setupSmtpServer(t, smtpHandler, nil)
+	defer teardownSmtpServer(smtpServer)
+	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(context.Background(), smtpServerPort)
+	defer teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
+
+	httpRequestCompleted := make(chan struct{})
+	for range concurrentRequests {
+		go func() {
+			requestPostEmail(t, testHttpServer.URL)
+			httpRequestCompleted <- struct{}{}
+		}()
+	}
+
+	for range concurrentRequests {
+		<-httpRequestCompleted
+	}
+	assert.Equal(t, concurrentRequests, emailsReceived)
+}
+
 func setupSmtpServer(t *testing.T, handler smtpd.Handler, authHandler smtpd.AuthHandler) (*smtpd.Server, int) {
 	smtpServer := newSmtpServer(t, handler, authHandler)
 	smtpListener, smtpServerPort := newSmtpServerListener()
