@@ -23,7 +23,7 @@ func TestResponseTimedOut(t *testing.T) {
 		}
 	}
 
-	testHttpServer := setupHttpServer(handler)
+	testHttpServer := setupHttpServerWithTimeout(handler)
 	defer testHttpServer.Close()
 
 	response, err := http.Get(testHttpServer.URL)
@@ -42,7 +42,7 @@ func TestResponseNotTimedOut(t *testing.T) {
 		}
 	}
 
-	testHttpServer := setupHttpServer(handler)
+	testHttpServer := setupHttpServerWithTimeout(handler)
 	defer testHttpServer.Close()
 
 	response, err := http.Get(testHttpServer.URL)
@@ -51,7 +51,7 @@ func TestResponseNotTimedOut(t *testing.T) {
 	assert.Equal(t, 0, responseTimedOut)
 }
 
-func setupHttpServer(handler http.HandlerFunc) *httptest.Server {
+func setupHttpServerWithTimeout(handler http.HandlerFunc) *httptest.Server {
 	mockGetEnv := func(key string) string {
 		if key == "TIMEOUT_REQUEST_PROCESSING" {
 			return strconv.Itoa(testTimeout)
