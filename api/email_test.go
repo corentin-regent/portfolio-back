@@ -29,11 +29,24 @@ const emailSubject = "Test subject"
 const emailBody = "Test body"
 const successRedirectUrl = "http://localhost/success"
 
+var expectedMessageReceived = fmt.Sprintf(
+	"To: %s\r\nSubject: %s\r\n\r\n%s\r\n\r\nSent by %s",
+	targetEmailAddress,
+	emailSubject,
+	emailBody,
+	emailSender,
+)
+var expectedErrorRedirectUrl = fmt.Sprintf(
+	"mailto:%s?subject=%s&body=%s",
+	targetEmailAddress,
+	url.PathEscape(emailSubject),
+	url.PathEscape(emailBody),
+)
+
 func TestPostEmailSendsEmail(t *testing.T) {
 	emailsReceived := 0
 	smtpHandler := func(_ net.Addr, from string, to []string, data []byte) error {
 		emailsReceived++
-		expectedMessageReceived := fmt.Sprintf("To: %s\r\nSubject: %s\r\n\r\n%s\r\n\r\nSent by %s", targetEmailAddress, emailSubject, emailBody, emailSender)
 		assert.Equal(t, sourceEmailAddress, from)
 		assert.Equal(t, []string{targetEmailAddress}, to)
 		assert.Contains(t, string(data), expectedMessageReceived)
@@ -41,7 +54,7 @@ func TestPostEmailSendsEmail(t *testing.T) {
 	}
 
 	smtpServer, smtpServerPort := setupSmtpServer(t, smtpHandler, nil)
-	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(smtpServerPort)
+	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(context.Background(), smtpServerPort)
 
 	requestPostEmail(t, testHttpServer.URL)
 	assert.Equal(t, emailsReceived, 1)
@@ -52,7 +65,7 @@ func TestPostEmailSendsEmail(t *testing.T) {
 
 func TestPostEmailRedirectIfOk(t *testing.T) {
 	smtpServer, smtpServerPort := setupSmtpServer(t, nil, nil)
-	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(smtpServerPort)
+	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(context.Background(), smtpServerPort)
 
 	response := requestPostEmail(t, testHttpServer.URL)
 	assert.Equal(t, http.StatusFound, response.StatusCode)
@@ -68,34 +81,22 @@ func TestPostEmailRedirectIfErrorInSmtpServer(t *testing.T) {
 	}
 
 	smtpServer, smtpServerPort := setupSmtpServer(t, smtpHandler, nil)
-	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(smtpServerPort)
+	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(context.Background(), smtpServerPort)
 
 	response := requestPostEmail(t, testHttpServer.URL)
 	assert.Equal(t, http.StatusSeeOther, response.StatusCode)
-	expectedRedirectUrl := fmt.Sprintf(
-		"mailto:%s?subject=%s&body=%s",
-		targetEmailAddress,
-		url.PathEscape(emailSubject),
-		url.PathEscape(emailBody),
-	)
-	assert.Equal(t, expectedRedirectUrl, response.Header.Get("Location"))
+	assert.Equal(t, expectedErrorRedirectUrl, response.Header.Get("Location"))
 
 	teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
 	teardownSmtpServer(smtpServer)
 }
 
 func TestPostEmailRedirectIfErrorConnectingToSmtpServer(t *testing.T) {
-	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(1234)
+	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(context.Background(), 1234)
 
 	response := requestPostEmail(t, testHttpServer.URL)
 	assert.Equal(t, http.StatusSeeOther, response.StatusCode)
-	expectedRedirectUrl := fmt.Sprintf(
-		"mailto:%s?subject=%s&body=%s",
-		targetEmailAddress,
-		url.PathEscape(emailSubject),
-		url.PathEscape(emailBody),
-	)
-	assert.Equal(t, expectedRedirectUrl, response.Header.Get("Location"))
+	assert.Equal(t, expectedErrorRedirectUrl, response.Header.Get("Location"))
 
 	teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
 }
@@ -108,11 +109,43 @@ func TestPostEmailReusesSmtpConnection(t *testing.T) {
 	}
 
 	smtpServer, smtpServerPort := setupSmtpServer(t, nil, smtpAuthHandler)
-	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(smtpServerPort)
+	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(context.Background(), smtpServerPort)
 
 	requestPostEmail(t, testHttpServer.URL)
 	requestPostEmail(t, testHttpServer.URL)
 	assert.Equal(t, 1, connSetupCount)
+
+	teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
+	teardownSmtpServer(smtpServer)
+}
+
+func TestPostEmailCancellation(t *testing.T) {
+	smtpRequestReceived := make(chan struct{})
+	unlockSmtpServer := make(chan struct{})
+	smtpHandler := func(_ net.Addr, _ string, _ []string, _ []byte) error {
+		smtpRequestReceived <- struct{}{}
+		<-unlockSmtpServer
+		return nil
+	}
+
+	httpHandlerContext, triggerCancellation := context.WithCancel(context.Background())
+	smtpServer, smtpServerPort := setupSmtpServer(t, smtpHandler, nil)
+	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(httpHandlerContext, smtpServerPort)
+
+	var response *http.Response
+	httpRequestCompleted := make(chan struct{})
+	go func() {
+		response = requestPostEmail(t, testHttpServer.URL)
+		httpRequestCompleted <- struct{}{}
+	}()
+	<-smtpRequestReceived
+
+	triggerCancellation()
+	unlockSmtpServer <- struct{}{}
+	<-httpRequestCompleted
+
+	assert.Equal(t, http.StatusSeeOther, response.StatusCode)
+	assert.Equal(t, expectedErrorRedirectUrl, response.Header.Get("Location"))
 
 	teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
 	teardownSmtpServer(smtpServer)
@@ -125,10 +158,14 @@ func setupSmtpServer(t *testing.T, handler smtpd.Handler, authHandler smtpd.Auth
 	return smtpServer, smtpServerPort
 }
 
-func setupHttpServer(smtpServerPort int) (*httptest.Server, *sync.WaitGroup, func()) {
-	httpServerContext, triggerShutdown := context.WithCancel(context.Background())
+func setupHttpServer(appContext context.Context, smtpServerPort int) (*httptest.Server, *sync.WaitGroup, func()) {
+	httpServerContext, triggerShutdown := context.WithCancel(appContext)
 	shutdownWaitGroup := &sync.WaitGroup{}
-	httpEmailHandler := http.HandlerFunc(HandleEmail(httpServerContext, shutdownWaitGroup, mockGetEnvWithServerPort(smtpServerPort)))
+	handleEmail := HandleEmail(httpServerContext, shutdownWaitGroup, mockGetEnvWithServerPort(smtpServerPort))
+	httpEmailHandler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		request = request.WithContext(appContext)
+		handleEmail(response, request)
+	})
 	testHttpServer := httptest.NewServer(httpEmailHandler)
 	return testHttpServer, shutdownWaitGroup, triggerShutdown
 }
