@@ -1,4 +1,4 @@
-package api
+package email
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"sync"
 )
 
-var errPostCancelled = errors.New("POST /email request was cancelled")
+var errCancelled = errors.New("POST /email request was cancelled")
 
 type smtpServer struct {
 	Host string
@@ -26,18 +26,18 @@ func (server *smtpServer) Name() string {
 	return server.Host + ":" + server.Port
 }
 
-type postEmailBody struct {
+type requestBody struct {
 	Sender             string
 	Subject            string
 	Body               string
 	SuccessRedirectUrl string
 }
 
-func HandleEmail(
+func HandlePostEmail(
 	appContext context.Context,
 	shutdownWaitGroup *sync.WaitGroup,
 	getEnv func(string) string,
-) func(http.ResponseWriter, *http.Request) {
+) http.HandlerFunc {
 
 	smtpClientDomain := getEnv("SMTP_CLIENT_DOMAIN")
 	smtpServerDomain := getEnv("SMTP_SERVER_DOMAIN")
@@ -47,7 +47,7 @@ func HandleEmail(
 	sourceEmailPassword := getEnv("SOURCE_EMAIL_PASSWORD")
 	skipTlsVerify := getEnv("TEST_ONLY_SKIP_TLS_VERIFY") == "dummy string just in case"
 
-	buildMessage := func(email *postEmailBody) string {
+	buildMessage := func(email *requestBody) string {
 		return fmt.Sprintf(
 			"To: %s\r\nSubject: %s\r\n\r\n%s\r\n\r\nSent by %s",
 			targetEmailAddress,
@@ -97,10 +97,10 @@ func HandleEmail(
 		if err != nil {
 			return
 		}
-		return errPostCancelled
+		return errCancelled
 	}
 
-	sendEmail := func(request *http.Request, client *smtp.Client, email *postEmailBody) (err error) {
+	sendEmail := func(request *http.Request, client *smtp.Client, email *requestBody) (err error) {
 		doneChannel := make(chan struct{})
 
 		log.Println("[DEBUG] Setting SMTP email sender")
@@ -173,7 +173,7 @@ func HandleEmail(
 		}
 	}
 
-	failPostEmail := func(response http.ResponseWriter, request *http.Request, email postEmailBody, err error) {
+	failPostEmail := func(response http.ResponseWriter, request *http.Request, email *requestBody, err error) {
 		log.Printf("[ERROR] POST /email failed for sender %q: %s\n", email.Sender, err)
 		failureRedirectUrl := fmt.Sprintf(
 			"mailto:%s?subject=%s&body=%s",
@@ -190,9 +190,23 @@ func HandleEmail(
 		smtpSetupErr error
 	)
 
-	handlePostEmail := func(response http.ResponseWriter, request *http.Request) {
+	shutdownWaitGroup.Add(1)
+	listenForShutdown := func() {
+		<-appContext.Done()
+		if smtpClient != nil {
+			log.Println("[INFO] Shutting down SMTP client")
+			err := smtpClient.Quit()
+			if err != nil {
+				log.Printf("[ERROR] SMTP client shutdown failed: %s\n", err)
+			}
+		}
+		shutdownWaitGroup.Done()
+	}
+
+	go listenForShutdown()
+	return func(response http.ResponseWriter, request *http.Request) {
 		decoder := json.NewDecoder(request.Body)
-		var email postEmailBody
+		var email *requestBody
 		err := decoder.Decode(&email)
 		if err != nil {
 			http.Error(response, err.Error(), http.StatusBadRequest)
@@ -212,34 +226,11 @@ func HandleEmail(
 			return
 		}
 
-		err = sendEmail(request, smtpClient, &email)
+		err = sendEmail(request, smtpClient, email)
 		if err == nil {
 			http.Redirect(response, request, email.SuccessRedirectUrl, http.StatusFound)
 		} else {
 			failPostEmail(response, request, email, err)
-		}
-	}
-
-	shutdownWaitGroup.Add(1)
-	listenForShutdown := func() {
-		<-appContext.Done()
-		if smtpClient != nil {
-			log.Println("[INFO] Shutting down SMTP client")
-			err := smtpClient.Quit()
-			if err != nil {
-				log.Printf("[ERROR] SMTP client shutdown failed: %s\n", err)
-			}
-		}
-		shutdownWaitGroup.Done()
-	}
-
-	go listenForShutdown()
-	return func(response http.ResponseWriter, request *http.Request) {
-		switch request.Method {
-		case http.MethodPost:
-			handlePostEmail(response, request)
-		default:
-			http.Error(response, fmt.Sprintf("unexpected method %q", request.Method), http.StatusMethodNotAllowed)
 		}
 	}
 }

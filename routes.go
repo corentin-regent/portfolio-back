@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"sync"
 
-	"portfolio-back/api"
+	"portfolio-back/api/email"
 )
 
 func InstallRoutes(
@@ -14,5 +14,5 @@ func InstallRoutes(
 	shutdownWaitGroup *sync.WaitGroup,
 	getEnv func(string) string,
 ) {
-	serveMux.HandleFunc("/email", api.HandleEmail(appContext, shutdownWaitGroup, getEnv))
+	serveMux.HandleFunc("POST /email", email.HandlePostEmail(appContext, shutdownWaitGroup, getEnv))
 }

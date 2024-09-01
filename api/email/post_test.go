@@ -1,4 +1,4 @@
-package api
+package email
 
 import (
 	"bytes"
@@ -43,7 +43,7 @@ var expectedErrorRedirectUrl = fmt.Sprintf(
 	url.PathEscape(emailBody),
 )
 
-func TestPostEmailSendsEmail(t *testing.T) {
+func TestSendEmail(t *testing.T) {
 	emailsReceived := 0
 	smtpHandler := func(_ net.Addr, from string, to []string, data []byte) error {
 		emailsReceived++
@@ -63,7 +63,7 @@ func TestPostEmailSendsEmail(t *testing.T) {
 	teardownSmtpServer(smtpServer)
 }
 
-func TestPostEmailRedirectIfOk(t *testing.T) {
+func TestRedirectIfOk(t *testing.T) {
 	smtpServer, smtpServerPort := setupSmtpServer(t, nil, nil)
 	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(context.Background(), smtpServerPort)
 
@@ -75,7 +75,7 @@ func TestPostEmailRedirectIfOk(t *testing.T) {
 	teardownSmtpServer(smtpServer)
 }
 
-func TestPostEmailRedirectIfErrorInSmtpServer(t *testing.T) {
+func TestRedirectIfErrorInSmtpServer(t *testing.T) {
 	smtpHandler := func(_ net.Addr, _ string, _ []string, _ []byte) error {
 		return errors.New("Error in SMTP server")
 	}
@@ -91,7 +91,7 @@ func TestPostEmailRedirectIfErrorInSmtpServer(t *testing.T) {
 	teardownSmtpServer(smtpServer)
 }
 
-func TestPostEmailRedirectIfErrorConnectingToSmtpServer(t *testing.T) {
+func TestRedirectIfErrorConnectingToSmtpServer(t *testing.T) {
 	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(context.Background(), 1234)
 
 	response := requestPostEmail(t, testHttpServer.URL)
@@ -101,7 +101,7 @@ func TestPostEmailRedirectIfErrorConnectingToSmtpServer(t *testing.T) {
 	teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
 }
 
-func TestPostEmailReusesSmtpConnection(t *testing.T) {
+func TestReuseSmtpConnection(t *testing.T) {
 	connSetupCount := 0
 	smtpAuthHandler := func(_ net.Addr, _ string, _ []byte, _ []byte, _ []byte) (bool, error) {
 		connSetupCount++
@@ -119,7 +119,7 @@ func TestPostEmailReusesSmtpConnection(t *testing.T) {
 	teardownSmtpServer(smtpServer)
 }
 
-func TestPostEmailCancellation(t *testing.T) {
+func TestCancellation(t *testing.T) {
 	smtpRequestReceived := make(chan struct{})
 	unlockSmtpServer := make(chan struct{})
 	smtpHandler := func(_ net.Addr, _ string, _ []string, _ []byte) error {
@@ -161,7 +161,7 @@ func setupSmtpServer(t *testing.T, handler smtpd.Handler, authHandler smtpd.Auth
 func setupHttpServer(appContext context.Context, smtpServerPort int) (*httptest.Server, *sync.WaitGroup, func()) {
 	httpServerContext, triggerShutdown := context.WithCancel(appContext)
 	shutdownWaitGroup := &sync.WaitGroup{}
-	handleEmail := HandleEmail(httpServerContext, shutdownWaitGroup, mockGetEnvWithServerPort(smtpServerPort))
+	handleEmail := HandlePostEmail(httpServerContext, shutdownWaitGroup, mockGetEnvWithServerPort(smtpServerPort))
 	httpEmailHandler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		request = request.WithContext(appContext)
 		handleEmail(response, request)
@@ -179,7 +179,7 @@ func newSmtpServer(t *testing.T, handler smtpd.Handler, authHandler smtpd.AuthHa
 		AuthHandler: authHandler,
 		TLSRequired: true,
 	}
-	err := server.ConfigureTLS("../smtp_test_server.crt", "../smtp_test_server.key")
+	err := server.ConfigureTLS("../../smtp_test_server.crt", "../../smtp_test_server.key")
 	if err != nil {
 		log.Panicf("Failed to configure TLS for SMTP server: %s\n", err)
 	}
@@ -260,7 +260,7 @@ func newHttpClientNoRedirects() *http.Client {
 }
 
 func newPostBody() io.Reader {
-	requestBody := &postEmailBody{
+	requestBody := &requestBody{
 		Sender:             emailSender,
 		Subject:            emailSubject,
 		Body:               emailBody,
