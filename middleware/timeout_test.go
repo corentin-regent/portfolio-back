@@ -22,14 +22,14 @@ func TestResponseTimedOut(t *testing.T) {
 			responseTimedOut++
 		}
 	}
+
 	testHttpServer := setupHttpServer(handler)
+	defer testHttpServer.Close()
 
 	response, err := http.Get(testHttpServer.URL)
 	require.Nil(t, err, "Request failed: %s\n", err)
 	assert.Equal(t, http.StatusOK, response.StatusCode)
 	assert.Equal(t, 1, responseTimedOut)
-
-	testHttpServer.Close()
 }
 
 func TestResponseNotTimedOut(t *testing.T) {
@@ -41,14 +41,14 @@ func TestResponseNotTimedOut(t *testing.T) {
 			responseTimedOut++
 		}
 	}
+
 	testHttpServer := setupHttpServer(handler)
+	defer testHttpServer.Close()
 
 	response, err := http.Get(testHttpServer.URL)
 	require.Nil(t, err, "Request failed: %s\n", err)
 	assert.Equal(t, http.StatusOK, response.StatusCode)
 	assert.Equal(t, 0, responseTimedOut)
-
-	testHttpServer.Close()
 }
 
 func setupHttpServer(handler http.HandlerFunc) *httptest.Server {

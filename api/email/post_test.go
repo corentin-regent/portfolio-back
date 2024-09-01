@@ -54,25 +54,23 @@ func TestSendEmail(t *testing.T) {
 	}
 
 	smtpServer, smtpServerPort := setupSmtpServer(t, smtpHandler, nil)
+	defer teardownSmtpServer(smtpServer)
 	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(context.Background(), smtpServerPort)
+	defer teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
 
 	requestPostEmail(t, testHttpServer.URL)
 	assert.Equal(t, emailsReceived, 1)
-
-	teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
-	teardownSmtpServer(smtpServer)
 }
 
 func TestRedirectIfOk(t *testing.T) {
 	smtpServer, smtpServerPort := setupSmtpServer(t, nil, nil)
+	defer teardownSmtpServer(smtpServer)
 	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(context.Background(), smtpServerPort)
+	defer teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
 
 	response := requestPostEmail(t, testHttpServer.URL)
 	assert.Equal(t, http.StatusFound, response.StatusCode)
 	assert.Equal(t, successRedirectUrl, response.Header.Get("Location"))
-
-	teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
-	teardownSmtpServer(smtpServer)
 }
 
 func TestRedirectIfErrorInSmtpServer(t *testing.T) {
@@ -81,24 +79,22 @@ func TestRedirectIfErrorInSmtpServer(t *testing.T) {
 	}
 
 	smtpServer, smtpServerPort := setupSmtpServer(t, smtpHandler, nil)
+	defer teardownSmtpServer(smtpServer)
 	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(context.Background(), smtpServerPort)
+	defer teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
 
 	response := requestPostEmail(t, testHttpServer.URL)
 	assert.Equal(t, http.StatusSeeOther, response.StatusCode)
 	assert.Equal(t, expectedErrorRedirectUrl, response.Header.Get("Location"))
-
-	teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
-	teardownSmtpServer(smtpServer)
 }
 
 func TestRedirectIfErrorConnectingToSmtpServer(t *testing.T) {
 	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(context.Background(), 1234)
+	defer teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
 
 	response := requestPostEmail(t, testHttpServer.URL)
 	assert.Equal(t, http.StatusSeeOther, response.StatusCode)
 	assert.Equal(t, expectedErrorRedirectUrl, response.Header.Get("Location"))
-
-	teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
 }
 
 func TestReuseSmtpConnection(t *testing.T) {
@@ -109,14 +105,13 @@ func TestReuseSmtpConnection(t *testing.T) {
 	}
 
 	smtpServer, smtpServerPort := setupSmtpServer(t, nil, smtpAuthHandler)
+	defer teardownSmtpServer(smtpServer)
 	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(context.Background(), smtpServerPort)
+	defer teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
 
 	requestPostEmail(t, testHttpServer.URL)
 	requestPostEmail(t, testHttpServer.URL)
 	assert.Equal(t, 1, connSetupCount)
-
-	teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
-	teardownSmtpServer(smtpServer)
 }
 
 func TestCancellation(t *testing.T) {
@@ -130,7 +125,9 @@ func TestCancellation(t *testing.T) {
 
 	httpHandlerContext, triggerCancellation := context.WithCancel(context.Background())
 	smtpServer, smtpServerPort := setupSmtpServer(t, smtpHandler, nil)
+	defer teardownSmtpServer(smtpServer)
 	testHttpServer, shutdownWaitGroup, triggerShutdown := setupHttpServer(httpHandlerContext, smtpServerPort)
+	defer teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
 
 	var response *http.Response
 	httpRequestCompleted := make(chan struct{})
@@ -146,9 +143,6 @@ func TestCancellation(t *testing.T) {
 
 	assert.Equal(t, http.StatusSeeOther, response.StatusCode)
 	assert.Equal(t, expectedErrorRedirectUrl, response.Header.Get("Location"))
-
-	teardownHttpServer(testHttpServer, shutdownWaitGroup, triggerShutdown)
-	teardownSmtpServer(smtpServer)
 }
 
 func setupSmtpServer(t *testing.T, handler smtpd.Handler, authHandler smtpd.AuthHandler) (*smtpd.Server, int) {
