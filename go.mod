@@ -4,7 +4,7 @@ go 1.22.6
 
 require (
 	github.com/mhale/smtpd v0.8.3
-	github.com/rs/cors v1.11.0
+	github.com/rs/cors v1.11.1
 	github.com/stretchr/testify v1.9.0
 )
 
