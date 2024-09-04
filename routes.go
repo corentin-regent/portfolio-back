@@ -14,5 +14,5 @@ func InstallRoutes(
 	shutdownWaitGroup *sync.WaitGroup,
 	getEnv func(string) string,
 ) {
-	serveMux.HandleFunc("POST /email", email.HandlePostEmail(appContext, shutdownWaitGroup, getEnv))
+	serveMux.HandleFunc("POST /api/email", email.HandlePostEmail(appContext, shutdownWaitGroup, getEnv))
 }

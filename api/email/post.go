@@ -15,7 +15,7 @@ import (
 	"sync"
 )
 
-var errCancelled = errors.New("POST /email request was cancelled")
+var errCancelled = errors.New("POST /api/email request was cancelled")
 
 type smtpServer struct {
 	Host string
@@ -178,7 +178,7 @@ func HandlePostEmail(
 	}
 
 	failPostEmail := func(response http.ResponseWriter, request *http.Request, email *requestBody, err error) {
-		log.Printf("[ERROR] POST /email failed for sender %q: %s\n", email.Sender, err)
+		log.Printf("[ERROR] POST /api/email failed for sender %q: %s\n", email.Sender, err)
 		failureRedirectUrl := fmt.Sprintf(
 			"mailto:%s?subject=%s&body=%s",
 			targetEmailAddress,
