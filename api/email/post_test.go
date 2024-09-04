@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mhale/smtpd"
@@ -147,9 +148,9 @@ func TestCancellation(t *testing.T) {
 
 func TestConcurrentRequests(t *testing.T) {
 	concurrentRequests := 10
-	emailsReceived := 0
+	var emailsReceived atomic.Uint32
 	smtpHandler := func(_ net.Addr, _ string, _ []string, _ []byte) error {
-		emailsReceived++
+		emailsReceived.Add(1)
 		return nil
 	}
 
@@ -169,7 +170,7 @@ func TestConcurrentRequests(t *testing.T) {
 	for range concurrentRequests {
 		<-httpRequestCompleted
 	}
-	assert.Equal(t, concurrentRequests, emailsReceived)
+	assert.Equal(t, concurrentRequests, int(emailsReceived.Load()))
 }
 
 func setupSmtpServer(t *testing.T, handler smtpd.Handler, authHandler smtpd.AuthHandler) (*smtpd.Server, int) {
