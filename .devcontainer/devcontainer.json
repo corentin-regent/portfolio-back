@@ -4,12 +4,14 @@
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker": {}
   },
+  "postCreateCommand": "./scripts/install-aws-sam.sh && rm ~/.docker/config.json",
   "customizations": {
     "vscode": {
       "extensions": [
         "bierner.markdown-preview-github-styles",
         "github.vscode-github-actions",
         "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml",
         "yzhang.markdown-all-in-one"
       ]
     }

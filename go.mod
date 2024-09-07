@@ -3,6 +3,8 @@ module portfolio-back
 go 1.22.6
 
 require (
+	github.com/aws/aws-lambda-go v1.47.0
+	github.com/awslabs/aws-lambda-go-api-proxy v0.16.2
 	github.com/mhale/smtpd v0.8.3
 	github.com/rs/cors v1.11.0
 	github.com/stretchr/testify v1.9.0

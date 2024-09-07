@@ -1,0 +1,24 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  PortfolioBack:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      CodeUri: ./
+      Handler: portfolio-back
+      Runtime: go1.x
+      Architectures:
+        - x86_64
+      Events:
+        SendEmail:
+          Type: HttpApi
+          Properties:
+            Path: /api/email
+            Method: post
+      Environment:
+        Variables:
+          TARGET_EMAIL_ADDRESS: target@test.com
+          TIMEOUT_REQUEST_PROCESSING: 5000
