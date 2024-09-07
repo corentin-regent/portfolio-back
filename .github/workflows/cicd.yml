@@ -29,16 +29,5 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Cache AWS SAM installation
-        id: cache-aws-sam
-        uses: actions/cache@v4
-        with:
-          path: /usr/local/bin/sam
-          key: aws-sam
-
-      - name: Install AWS SAM
-        if: steps.cache-aws-sam.outputs.cache-hit != 'true'
-        run: ./scripts/install-aws-sam.sh
-
       - name: Run the tests
         run: go test ./...
