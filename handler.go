@@ -17,6 +17,5 @@ func NewHandler(
 	InstallRoutes(serveMux, appContext, shutdownWaitGroup, getEnv)
 	var handler http.Handler = middleware.Context(serveMux, appContext)
 	handler = middleware.Timeout(handler, getEnv)
-	handler = middleware.Cors(handler, getEnv)
 	return handler
 }
